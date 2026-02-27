@@ -17,9 +17,36 @@ page = st.sidebar.radio("Navigation", ["Graphiques", "Prédiction"])
 
 # PAGE GRAPHIQUES (EDA)
 if page == "Graphiques":
+    
+    st.subheader("Indicateurs clés")
+
+    col1, col2, col3 = st.columns(3)
+
+    # Retard moyen global
+    if delay_col in df.columns:
+        avg_delay = df[delay_col].mean()
+    else:
+        avg_delay = 0
+
+    # Total trajets 
+    if "Nombre de circulations prévues" in df.columns:
+        total_trips = df["Nombre de circulations prévues"].sum()
+    else:
+        total_trips = len(df)
+
+    # Taux de ponctualité (moins de 5 minutes de retard)
+    if delay_col in df.columns:
+        punctuality_rate = (df[delay_col] <= 5).mean() * 100
+    else:
+        punctuality_rate = 0
+
+    col1.metric("Retard moyen global", f"{avg_delay:.2f} min")
+    col2.metric("Nombre total de circulations", f"{int(total_trips):,}")
+    col3.metric("Taux de ponctualité (<5min)", f"{punctuality_rate:.1f}%")
+
     st.title("Exploration des données")
 
-    # Tendance mensuelle
+    # Tendances mensuellesk
     if "Date" in df.columns and delay_col in df.columns:
         st.subheader("Tendance mensuelle des retards")
 
