@@ -1,215 +1,143 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
 import matplotlib.pyplot as plt
-import seaborn as sns
+import matplotlib.dates as mdates
+import datetime
 
+df = pd.read_csv("dataset_cleaned.csv", sep=";")
 
-st.set_page_config(
-    page_title="TARDIS - SNCF Delay Predictor",
-    layout="wide"
-)
-
-st.title("TARDIS")
-st.subheader("Analyse et prédiction des retards SNCF")
-
-
-@st.cache_data
-def load_data():
-    df = pd.read_csv("dataset_clean.csv", sep=";")
-    df.columns = df.columns.str.strip()
-    return df
-
-
-@st.cache_resource
-def load_model():
-    return joblib.load("model.joblib")
-
-
-df = load_data()
-model = load_model()
+model = joblib.load("model.joblib")
+le_dep = joblib.load("le_dep.joblib")
+le_arr = joblib.load("le_arr.joblib")
 
 delay_col = "Retard moyen de tous les trains à l'arrivée"
 
+page = st.sidebar.radio("Navigation", ["Graphiques", "Prédiction"])
 
-page = st.sidebar.selectbox(
-    "Navigation",
-    ["Analyse Globale", "Analyse par Liaison", "Prédiction"]
-)
+# PAGE GRAPHIQUES (EDA)
+if page == "Graphiques":
+    st.title("Exploration des données")
 
+    # Tendance mensuelle
+    if "Date" in df.columns and delay_col in df.columns:
+        st.subheader("Tendance mensuelle des retards")
 
-if page == "Analyse Globale":
+        tmp = df.copy()
+        tmp["Date"] = pd.to_datetime(tmp["Date"], errors="coerce")
+        tmp["month_period"] = tmp["Date"].dt.to_period("M")
 
-    st.header("Vue globale du réseau")
+        series = (
+            tmp.groupby("month_period")[delay_col]
+            .mean()
+            .dropna()
+        )
 
-    col1, col2 = st.columns(2)
+        series.index = series.index.to_timestamp()
 
-    with col1:
-        st.subheader("Top 10 des liaisons les plus en retard")
+        fig, ax = plt.subplots(figsize=(14, 5))
+        ax.plot(series.index, series.values)
 
-        top_routes = (
-            df.groupby(["Gare de départ", "Gare d'arrivée"])[delay_col]
+        ax.set_title("Tendance mensuelle des retards")
+        ax.set_xlabel("Mois")
+        ax.set_ylabel("Retard moyen (min)")
+
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+
+        fig.autofmt_xdate()
+        st.pyplot(fig)
+
+    # Top gares
+    if delay_col in df.columns and "Gare d'arrivée" in df.columns:
+        st.subheader("Top 10 gares les plus retardées")
+
+        by_station = (
+            df.groupby("Gare d'arrivée")[delay_col]
             .mean()
             .sort_values(ascending=False)
             .head(10)
-            .reset_index()
         )
 
-        top_routes["Liaison"] = (
-            top_routes["Gare de départ"] + " -> " +
-            top_routes["Gare d'arrivée"]
-        )
-
-        fig, ax = plt.subplots(figsize=(8, 5))
-        sns.barplot(
-            data=top_routes,
-            x=delay_col,
-            y="Liaison",
-            ax=ax
-        )
-        ax.set_xlabel("Retard moyen (minutes)")
-        ax.set_ylabel("Liaison")
+        fig, ax = plt.subplots()
+        ax.bar(by_station.index, by_station.values)
+        ax.set_title("Top 10 gares (retard moyen)")
+        ax.set_xlabel("Gare d'arrivée")
+        ax.set_ylabel("Retard moyen (min)")
+        plt.xticks(rotation=60, ha="right")
         st.pyplot(fig)
 
-    with col2:
-        st.subheader("Evolution mensuelle des retards")
+    # Matrice départ / arrivée
+    st.subheader("Matrice départ / arrivée (retard moyen)")
 
-        monthly = (
-            df.groupby("month")[delay_col]
-            .mean()
-            .reset_index()
+    if delay_col in df.columns:
+        top_dep = df["Gare de départ"].value_counts().head(8).index
+        top_arr = df["Gare d'arrivée"].value_counts().head(8).index
+
+        pivot = (
+            df[df["Gare de départ"].isin(top_dep) & df["Gare d'arrivée"].isin(top_arr)]
+            .pivot_table(index="Gare de départ", columns="Gare d'arrivée", values=delay_col, aggfunc="mean")
         )
 
-        fig2, ax2 = plt.subplots(figsize=(8, 5))
-        sns.lineplot(
-            data=monthly,
-            x="month",
-            y=delay_col,
-            marker="o",
-            ax=ax2
-        )
-        ax2.set_xlabel("Mois")
-        ax2.set_ylabel("Retard moyen (minutes)")
-        st.pyplot(fig2)
+        M = pivot.astype(float).fillna(0).to_numpy()
 
-    st.subheader("Répartition moyenne des causes de retard")
+        fig, ax = plt.subplots()
+        im = ax.imshow(M, aspect="auto")
+        ax.set_title("Retard moyen (top départ / arrivée)")
+        ax.set_xticks(range(pivot.shape[1]))
+        ax.set_xticklabels(pivot.columns, rotation=60, ha="right")
+        ax.set_yticks(range(pivot.shape[0]))
+        ax.set_yticklabels(pivot.index)
+        fig.colorbar(im, ax=ax, label="Retard moyen (min)")
+        st.pyplot(fig)
 
-    cause_cols = [c for c in df.columns if "Prct retard" in c]
-    cause_means = df[cause_cols].mean().sort_values(ascending=False)
+# PAGE PRÉDICTION
+else:
+    st.title("Prédiction de retard")
 
-    fig3, ax3 = plt.subplots(figsize=(10, 5))
-    sns.barplot(
-        x=cause_means.values,
-        y=cause_means.index,
-        ax=ax3
-    )
-    ax3.set_xlabel("Pourcentage moyen (%)")
-    ax3.set_ylabel("Cause")
-    st.pyplot(fig3)
+    gares_dep = sorted(df["Gare de départ"].dropna().unique())
+    gares_arr = sorted(df["Gare d'arrivée"].dropna().unique())
 
+    gare_dep = st.selectbox("Gare de départ", gares_dep)
+    gare_arr = st.selectbox("Gare d'arrivée", gares_arr)
 
-elif page == "Analyse par Liaison":
+    mois = st.slider("Mois", 1, 12, datetime.datetime.now().month)
 
-    st.header("Analyse personnalisée d'une liaison")
+    # durée moyenne par liaison
+    if "Durée moyenne du trajet" in df.columns:
+        df_route = df[
+            (df["Gare de départ"] == gare_dep) & (df["Gare d'arrivée"] == gare_arr)
+        ]
 
-    departure = st.selectbox(
-        "Gare de départ",
-        sorted(df["Gare de départ"].unique())
-    )
-
-    arrival = st.selectbox(
-        "Gare d'arrivée",
-        sorted(df["Gare d'arrivée"].unique())
-    )
-
-    filtered = df[
-        (df["Gare de départ"] == departure) &
-        (df["Gare d'arrivée"] == arrival)
-    ]
-
-    if filtered.empty:
-        st.warning("Aucune donnée disponible pour cette liaison.")
-    else:
-
-        avg_delay = filtered[delay_col].mean()
-
-        cancel_rate = (
-            filtered["Nombre de trains annulés"].sum() /
-            filtered["Nombre de circulations prévues"].sum()
-        ) * 100
-
-        col1, col2 = st.columns(2)
-
-        col1.metric("Retard moyen", f"{avg_delay:.2f} min")
-        col2.metric("Taux d'annulation", f"{cancel_rate:.2f} %")
-
-        st.subheader("Evolution mensuelle pour cette liaison")
-
-        monthly_filtered = (
-            filtered.groupby("month")[delay_col]
-            .mean()
-            .reset_index()
-        )
-
-        fig4, ax4 = plt.subplots()
-        sns.lineplot(
-            data=monthly_filtered,
-            x="month",
-            y=delay_col,
-            marker="o",
-            ax=ax4
-        )
-        ax4.set_xlabel("Mois")
-        ax4.set_ylabel("Retard moyen (minutes)")
-        st.pyplot(fig4)
-
-
-elif page == "Prédiction":
-
-    st.header("Prédiction du retard estimé")
-
-    departure = st.selectbox(
-        "Gare de départ",
-        sorted(df["Gare de départ"].unique())
-    )
-
-    arrival = st.selectbox(
-        "Gare d'arrivée",
-        sorted(df["Gare d'arrivée"].unique())
-    )
-
-    month = st.slider("Mois", 1, 12, 6)
-
-    duration = st.number_input(
-        "Durée moyenne du trajet (minutes)",
-        min_value=0.0,
-        value=120.0
-    )
-
-    trains = st.number_input(
-        "Nombre de trains programmés",
-        min_value=0,
-        value=10
-    )
-
-    if st.button("Estimer le retard"):
-
-        input_df = pd.DataFrame([{
-            "Gare de départ": departure,
-            "Gare d'arrivée": arrival,
-            "Mois": month,
-            "Durée moyenne du trajet": duration,
-            "Nombre de trains programmés": trains
-        }])
-
-        prediction = model.predict(input_df)[0]
-
-        st.success(f"Retard estimé : {prediction:.2f} minutes")
-
-        if prediction < 5:
-            st.write("Risque faible de retard.")
-        elif prediction < 15:
-            st.write("Risque modéré de retard.")
+        if len(df_route) > 0:
+            duree_moy = df_route["Durée moyenne du trajet"].mean()
         else:
-            st.write("Risque élevé de retard.")
+            duree_moy = df["Durée moyenne du trajet"].mean()
+
+    else:
+        duree_moy = 0
+        st.write("Durée moyenne indisponible")
+
+
+    dep_enc = le_dep.transform([gare_dep])[0]
+    arr_enc = le_arr.transform([gare_arr])[0]
+
+    X_pred = pd.DataFrame(
+        [[dep_enc, arr_enc, mois, duree_moy]],
+        columns=[
+            "Gare_depart_enc",
+            "Gare_arrivee_enc",
+            "Mois",
+            "Durée moyenne du trajet",
+        ],
+    )
+
+    try:
+        pred = model.predict(X_pred)[0]
+        st.success(f"Retard prédit : {pred:.2f} minutes")
+    except Exception as e:
+        st.error(f"Erreur de prédiction : {e}")
+        st.write(
+            "Colonnes attendues :",
+            model.feature_names_in_ if hasattr(model, "feature_names_in_") else "inconnues",
+        )
