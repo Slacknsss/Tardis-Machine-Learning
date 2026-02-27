@@ -17,7 +17,6 @@ page = st.sidebar.radio("Navigation", ["Graphiques", "Prédiction"])
 
 # PAGE GRAPHIQUES (EDA)
 if page == "Graphiques":
-    
     st.subheader("Indicateurs clés")
 
     col1, col2, col3 = st.columns(3)
@@ -28,7 +27,7 @@ if page == "Graphiques":
     else:
         avg_delay = 0
 
-    # Total trajets 
+    # Total trajets
     if "Nombre de circulations prévues" in df.columns:
         total_trips = df["Nombre de circulations prévues"].sum()
     else:
