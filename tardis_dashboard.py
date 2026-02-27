@@ -54,11 +54,7 @@ if page == "Graphiques":
         tmp["Date"] = pd.to_datetime(tmp["Date"], errors="coerce")
         tmp["month_period"] = tmp["Date"].dt.to_period("M")
 
-        series = (
-            tmp.groupby("month_period")[delay_col]
-            .mean()
-            .dropna()
-        )
+        series = tmp.groupby("month_period")[delay_col].mean().dropna()
 
         series.index = series.index.to_timestamp()
 
@@ -101,9 +97,13 @@ if page == "Graphiques":
         top_dep = df["Gare de départ"].value_counts().head(8).index
         top_arr = df["Gare d'arrivée"].value_counts().head(8).index
 
-        pivot = (
-            df[df["Gare de départ"].isin(top_dep) & df["Gare d'arrivée"].isin(top_arr)]
-            .pivot_table(index="Gare de départ", columns="Gare d'arrivée", values=delay_col, aggfunc="mean")
+        pivot = df[
+            df["Gare de départ"].isin(top_dep) & df["Gare d'arrivée"].isin(top_arr)
+        ].pivot_table(
+            index="Gare de départ",
+            columns="Gare d'arrivée",
+            values=delay_col,
+            aggfunc="mean",
         )
 
         M = pivot.astype(float).fillna(0).to_numpy()
@@ -145,7 +145,6 @@ else:
         duree_moy = 0
         st.write("Durée moyenne indisponible")
 
-
     dep_enc = le_dep.transform([gare_dep])[0]
     arr_enc = le_arr.transform([gare_arr])[0]
 
@@ -166,5 +165,7 @@ else:
         st.error(f"Erreur de prédiction : {e}")
         st.write(
             "Colonnes attendues :",
-            model.feature_names_in_ if hasattr(model, "feature_names_in_") else "inconnues",
+            model.feature_names_in_
+            if hasattr(model, "feature_names_in_")
+            else "inconnues",
         )
