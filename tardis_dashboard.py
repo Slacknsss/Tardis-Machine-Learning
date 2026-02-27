@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import datetime
 
-df = pd.read_csv("dataset_cleaned.csv", sep=";")
+df = pd.read_csv("cleaned_dataset.csv", sep=";")
 
 model = joblib.load("model.joblib")
 le_dep = joblib.load("le_dep.joblib")
