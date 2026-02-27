@@ -114,12 +114,10 @@ else:
         else:
             duree_moy = df["Durée moyenne du trajet"].mean()
 
-        st.write(f"Durée moyenne utilisée : {duree_moy:.2f} min")
     else:
         duree_moy = 0
         st.write("Durée moyenne indisponible")
 
-    st.write(f"Durée moyenne estimée : {duree_moy:.2f} min")
 
     dep_enc = le_dep.transform([gare_dep])[0]
     arr_enc = le_arr.transform([gare_arr])[0]
