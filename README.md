@@ -13,6 +13,14 @@ The objective is to:
 
 This project combines data preprocessing, exploratory data analysis (EDA), and supervised machine learning.
 
+## Team
+
+Epitech Paris, B-DAT-200, team of three.
+
+- Simon Slack: data cleaning and EDA (`tardis_eda.ipynb`, produces `cleaned_dataset.csv`)
+- Raphaël Sebag: model comparison (`tardis_model.ipynb`)
+- Jules Fischer: Streamlit dashboard (`tardis_dashboard.py`) and the model it loads
+
 ---
 
 ## Dataset Description
@@ -82,8 +90,9 @@ The model predicts the average arrival delay based on:
 - Month
 - Average trip duration
 
-Model type:
-- Random Forest Regressor
+`tardis_model.ipynb` compares 13 regressors. The best one is Gradient Boosting with R² = 0.28 on the test set, Random Forest gets 0.22. So the prediction stays rough.
+
+The dashboard loads its own `model.joblib`, trained with a few more features (route, month as sin/cos, year).
 
 Encoders ensure consistency between training and prediction phases.
 
@@ -111,6 +120,11 @@ The system:
 
 To launch the dashboard:
 
+```bash
+pip install -r requirements.txt
+streamlit run tardis_dashboard.py
+```
+
 ---
 
 ## Key Insights
@@ -118,7 +132,7 @@ To launch the dashboard:
 - Delay patterns vary seasonally.
 - Some stations consistently show higher average delays.
 - Traffic density impacts delay magnitude.
-- Predictive modeling provides reasonable estimation based on historical patterns.
+- With an R² around 0.28, the model only explains a small part of the delays.
 
 ---
 
